@@ -1,0 +1,5 @@
+method,best_accuracy,experiment,path
+attention,70.41,student_attention_cifar100_T4.0_a0.3_w1.0,./checkpoints/student_attention_cifar100_T4.0_a0.3_w1.0_results.txt
+baseline,69.26,student_baseline_cifar100_w1.0,./checkpoints/student_baseline_cifar100_w1.0_results.txt
+self,70.82,student_self_cifar100_T4.0_a0.3_w1.0,./checkpoints/student_self_cifar100_T4.0_a0.3_w1.0_results.txt
+kd,73.07,student_kd_cifar100_T4.0_a0.3_w1.0,./checkpoints/student_kd_cifar100_T4.0_a0.3_w1.0_results.txt
