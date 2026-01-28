@@ -6,7 +6,10 @@
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu-v100-16g
+#SBATCH --partition=gpu-v100-32g
+
+# Config
+DATASET=${DATASET:-cifar10}
 
 # Load modules
 module load mamba
@@ -20,6 +23,7 @@ cd /scratch/work/zhangx29/knowledge-distillation
 
 # Train teacher model
 python src/train_teacher.py \
+    --dataset "$DATASET" \
     --epochs 100 \
     --lr 0.1 \
     --batch-size 128 \

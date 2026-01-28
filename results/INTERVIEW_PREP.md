@@ -1,197 +1,158 @@
-# 🎯 Knowledge Distillation 面试准备指南
+# Knowledge Distillation Interview Notes (English)
 
-**Aalto University 硕士论文职位面试**
-
----
-
-## 📋 项目概述（30秒电梯演讲）
-
-> "我实现了一个完整的知识蒸馏项目，将 21M 参数的 ResNet-34 压缩到 2.4M 的 MobileNetV2，实现约 9 倍压缩。在 CIFAR-100 上，知识蒸馏将学生模型的准确率从 69.26% 提升到 73.07%，提升了 3.81 个百分点。这个项目展示了知识蒸馏在模型压缩中的实际价值。"
+Master's Thesis Interview Preparation
 
 ---
 
-## 📊 关键数据（必须记住）
+## Elevator Pitch (30 seconds)
 
-### CIFAR-10 结果
-| 模型 | 准确率 | 参数量 |
-|------|--------|--------|
-| Teacher (ResNet-34) | 94.08% | 21.3M |
-| Student Baseline | 92.10% | 2.2M |
-| Student + KD | 92.95% | 2.2M |
-| **KD 提升** | **+0.85%** | - |
-
-### CIFAR-100 结果
-| 模型 | 准确率 | 参数量 |
-|------|--------|--------|
-| Teacher (ResNet-34) | 79.16% | 21.3M |
-| Student Baseline | 69.26% | 2.4M |
-| Student + KD | 73.07% | 2.4M |
-| **KD 提升** | **+3.81%** | - |
-
-### 核心发现
-- 模型压缩: **~9x**
-- CIFAR-100 上 KD 提升是 CIFAR-10 的 **4.5 倍**
-- 最优超参数: T=4~16, α=0.3~0.5
+"I implemented a complete knowledge distillation pipeline that compresses a 21M-parameter ResNet-34 teacher into a 2.5M MobileNetV2 student (~9x compression). I compared six distillation methods across CIFAR-10, CIFAR-100, and Tiny-ImageNet. On Tiny-ImageNet, vanilla KD improves the student from 55.30% to 60.55% (+5.25%), showing that distillation gains grow with task difficulty."
 
 ---
 
-## 🧠 技术问题与答案
+## Key Numbers (must memorize)
 
-### Q1: 知识蒸馏的核心原理是什么？
+### Quick Comparison Table (all datasets)
 
-**答案**:
-知识蒸馏让小模型（Student）从大模型（Teacher）的软标签中学习。软标签（soft labels）包含类别之间的相似性信息，这被称为"暗知识"（dark knowledge）。
+| Dataset | Teacher | Baseline | Best Method | Best Acc | Gain |
+|--------|---------|----------|-------------|----------|------|
+| CIFAR-10 | 94.08% | 92.10% | KD | 92.95% | +0.85% |
+| CIFAR-100 | 79.16% | 69.26% | FitNets | 73.80% | +4.54% |
+| Tiny-ImageNet | 71.42% | 55.30% | KD | 60.55% | +5.25% |
 
-例如，对于一张猫的图片：
-- 硬标签: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0] — 只有"猫"是1
-- 软标签: [0.01, 0.02, 0.05, 0.60, 0.08, **0.15**, 0.03, 0.02, 0.02, 0.02]
+Core insight: the harder the task, the larger the distillation gain.
 
-软标签告诉我们"这张图虽然是猫，但看起来有点像狗"。
+### Tiny-ImageNet (200 classes, 64x64)
 
----
+| Model | Accuracy | Params | Gain |
+|------|----------|--------|------|
+| Teacher (ResNet-34) | 71.42% | 21.4M | - |
+| Student Baseline | 55.30% | 2.5M | Baseline |
+| Student + KD | 60.55% | 2.5M | +5.25% |
+| Student + Contrastive | 59.05% | 2.5M | +3.75% |
+| Student + FitNets | 57.05% | 2.5M | +1.75% |
+| Student + Attention | 53.47% | 2.5M | -1.83% |
+| Student + Self | 52.88% | 2.5M | -2.42% |
 
-### Q2: 损失函数是什么？
-
-**答案**:
-$$L_{total} = \alpha \cdot L_{CE}(student, labels) + (1-\alpha) \cdot T^2 \cdot L_{KL}(soft_{student}, soft_{teacher})$$
-
-- **第一项**: 交叉熵损失，让 Student 学习正确答案
-- **第二项**: KL 散度，让 Student 模仿 Teacher 的概率分布
-- **α**: 平衡两个损失的权重 (默认 0.3)
-- **T**: 温度，控制概率分布的软硬程度
-
----
-
-### Q3: 为什么要乘以 T²？
-
-**答案**:
-当我们对 logits 除以 T 时，softmax 的梯度会缩小约 1/T²。为了保持梯度量级与温度无关，需要乘以 T² 来补偿。这确保不同温度下的训练稳定性。
+Summary points:
+- Compression ratio: ~9x
+- CIFAR-100 KD gain is 4.5x larger than CIFAR-10
+- Tiny-ImageNet KD gain is the largest (+5.25%)
+- Best hyperparams in this setup: T=4~16, alpha=0.3~0.5
 
 ---
 
-### Q4: Temperature 的作用是什么？
+## Method Comparison (Tiny-ImageNet ranking)
 
-**答案**:
-Temperature 控制概率分布的"软硬程度"：
-- T=1: 分布尖锐，接近 one-hot
-- T=4~16: 分布平滑，暴露类别间的相似性
-- T→∞: 接近均匀分布
+| Rank | Method | Accuracy | Gain vs Baseline |
+|------|--------|----------|------------------|
+| 1 | KD (logits) | 60.55% | +5.25% |
+| 2 | Contrastive | 59.05% | +3.75% |
+| 3 | FitNets | 57.05% | +1.75% |
+| 4 | Baseline | 55.30% | - |
+| 5 | Attention | 53.47% | -1.83% |
+| 6 | Self | 52.88% | -2.42% |
 
-较高的温度能更好地揭示类别之间的关系，这正是"暗知识"的来源。
-
----
-
-### Q5: 为什么用 Forward KL 而不是 Reverse KL？
-
-**答案**:
-- **Forward KL** $D_{KL}(P_{teacher} \| Q_{student})$: 让 Student 覆盖 Teacher 所有认为可能的类别
-- **Reverse KL**: 让 Student 只抓住一个模式
-
-我们希望 Student 学习 Teacher 的所有知识，所以用 Forward KL。
+Takeaway: KD and Contrastive are most stable for harder tasks.
 
 ---
 
-### Q6: 为什么 CIFAR-100 上 KD 效果更好？
+## Common Interview Questions (with answers)
 
-**答案**:
-CIFAR-100 有 100 个细粒度类别（如"橡树" vs "枫树"），类别之间有更丰富的相似性关系。Teacher 的软标签提供了更多有价值的信息。
+### Q1: What is the core idea of knowledge distillation?
+Answer: Knowledge distillation trains a small student to match a large teacher’s output distribution, not just the hard labels. The teacher’s soft probabilities encode class similarity (dark knowledge), e.g., an image of “cat” may assign non‑trivial probability to “dog.” This gives the student a richer training signal than one‑hot labels and acts as a regularizer, improving generalization.
 
-在简单任务（CIFAR-10）上，Student 本身就能学得很好，KD 的额外信息价值有限。
+### Q2: What is the loss function?
+Answer:
+L = alpha * L_CE + (1 - alpha) * T^2 * L_KL
+- L_CE: cross‑entropy with ground‑truth labels (forces correctness)
+- L_KL: KL divergence between teacher and student soft distributions (transfers dark knowledge)
+- T: temperature to smooth probabilities (reveals inter‑class similarity)
+- alpha: balance between hard and soft supervision
+In practice I use T in [4, 16] and alpha in [0.3, 0.5] as a stable range.
 
----
+### Q3: Why multiply by T^2?
+Answer: Dividing logits by T makes softmax outputs smoother but also shrinks gradients (approximately by 1/T^2). Without compensation, large T would make the distillation loss too weak. Multiplying by T^2 restores the gradient scale so different temperatures remain comparable and training stays stable.
 
-### Q7: 你选择 MobileNetV2 作为 Student 的原因？
+### Q4: What does temperature do?
+Answer: Temperature controls the “softness” of the probability distribution. With T=1, the teacher outputs are sharp (close to one‑hot). With larger T, probabilities spread across similar classes, exposing fine‑grained relationships that guide the student (e.g., “oak” vs “maple” in Tiny‑ImageNet).
 
-**答案**:
-MobileNetV2 是为移动设备设计的轻量级网络，使用深度可分离卷积（Depthwise Separable Convolution）大幅减少计算量。它只有 2.4M 参数，是 ResNet-34 的约 1/9，非常适合作为压缩目标。
+### Q5: Why forward KL instead of reverse KL?
+Answer: Forward KL, D_KL(P_teacher || Q_student), penalizes the student if it assigns near‑zero probability to classes the teacher considers plausible. This encourages coverage of the teacher’s full distribution. Reverse KL is mode‑seeking and tends to ignore secondary classes, which is undesirable for distillation because it discards dark knowledge.
 
----
+### Q6: Why does KD work better on harder datasets?
+Answer: Harder datasets have more confusing classes and richer inter‑class structure, so the teacher’s soft labels contain more useful information. The student also has more room to improve. That’s why the gain grows from CIFAR‑10 (+0.85%) to CIFAR‑100 (+3.81%) to Tiny‑ImageNet (+5.25%).
 
-### Q8: 还有哪些其他的知识蒸馏方法？
+### Q7: Why MobileNetV2 as student?
+Answer: MobileNetV2 is designed for efficient inference with depthwise separable convolutions, giving a strong accuracy‑to‑compute tradeoff. It has ~2.5M parameters vs 21M in ResNet‑34, providing ~9× compression while still being competitive for distillation.
 
-**答案**:
-1. **Feature-based (FitNets)**: 让 Student 模仿 Teacher 的中间层特征
-2. **Attention Transfer**: 匹配注意力图
-3. **Self-distillation**: 模型蒸馏自己
-4. **Contrastive Distillation**: 使用对比学习
+### Q8: Why did Attention Transfer and Self-distillation underperform on Tiny-ImageNet?
+Answer:
+- Attention transfer relies on spatial maps; at 64x64 resolution and 200 fine‑grained classes, attention can be too coarse and noisy. It may emphasize regions that are not discriminative enough.
+- Self‑distillation uses an EMA teacher derived from the student. On hard datasets, the student is not strong enough early on, so the EMA teacher may provide weak supervision compared to a strong external teacher.
 
----
+### Q9: Which methods did you implement?
+Answer: I implemented six methods: baseline (no KD), KD (logits), FitNets (feature MSE with a 1x1 projection), Attention Transfer (attention map alignment), Self‑distillation (EMA teacher), and Contrastive Distillation (InfoNCE on pooled features). I also built scripts to run all methods and generate comparison plots automatically.
 
-## 💡 准备解释的代码片段
+### Q10: What would you do next?
+Answer: I would scale to ImageNet‑1K, experiment with hybrid losses (KD + feature‑based), and explore pruning/quantization for further compression. I would also measure actual inference latency/energy on target hardware, not just parameter count.
 
-### 蒸馏损失函数
-```python
-# distillation.py
-def forward(self, student_logits, teacher_logits, labels):
-    # 硬标签损失
-    hard_loss = self.ce_loss(student_logits, labels)
-    
-    # 软标签损失
-    student_soft = F.log_softmax(student_logits / self.temperature, dim=1)
-    teacher_soft = F.softmax(teacher_logits / self.temperature, dim=1)
-    soft_loss = self.kl_loss(student_soft, teacher_soft) * (self.temperature ** 2)
-    
-    # 组合损失
-    total_loss = self.alpha * hard_loss + (1 - self.alpha) * soft_loss
-    return total_loss
-```
+### Q11: How did you choose teacher and student architectures?
+Answer: I chose ResNet‑34 as a strong but manageable teacher and MobileNetV2 as a lightweight student designed for mobile/edge deployment. This pairing gives a clear compression gap (~9×) while keeping the student competitive enough to benefit from distillation.
 
-### 蒸馏训练循环
-```python
-# train_student.py
-for images, labels in train_loader:
-    # Teacher 不计算梯度（冻结）
-    with torch.no_grad():
-        teacher_logits = teacher(images)
-    
-    # Student 前向传播
-    student_logits = student(images)
-    
-    # 蒸馏损失
-    loss = criterion(student_logits, teacher_logits, labels)
-    
-    # 只更新 Student
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-```
+### Q12: Why not train the student from scratch only?
+Answer: A baseline trained only with hard labels misses the teacher’s dark knowledge. Distillation adds soft supervision that encodes class similarities and acts as regularization, which consistently improves accuracy on harder datasets.
 
----
+### Q13: How did you select the distillation layer for feature methods?
+Answer: I use mid‑to‑late feature layers where semantic information is richer. In code, I specify layers explicitly (e.g., ResNet layer4 and MobileNetV2 features.18) and align spatial sizes before computing loss.
 
-## 🎤 可能的开放性问题
+### Q14: What happens if teacher and student feature maps have different sizes?
+Answer: I align spatial dimensions using adaptive average pooling to the smaller size. This makes feature losses well‑defined without introducing extra trainable parameters.
 
-### "这个项目对你的研究兴趣有什么启发？"
+### Q15: How did you ensure reproducibility?
+Answer: I set random seeds, fixed data preprocessing, logged metrics to TensorBoard, and saved checkpoints. Scripts are deterministic and can be run on SLURM with controlled configs.
 
-> "这个项目让我对高效深度学习产生了浓厚兴趣。我发现模型压缩不仅是工程问题，更涉及深刻的学习理论问题——比如知识如何在神经网络间传递。我希望在硕士期间深入研究模型压缩、神经架构搜索或高效推理等方向。"
+### Q16: What metrics did you track besides accuracy?
+Answer: I tracked training/validation loss, best accuracy, parameter count, and (when needed) inference speed using a separate evaluation script.
 
-### "如果有更多时间，你会做什么改进？"
+### Q17: How do you interpret the KD gains across datasets?
+Answer: Gains increase with task difficulty (CIFAR‑10 < CIFAR‑100 < Tiny‑ImageNet). Harder tasks have richer class relationships, so soft labels are more informative.
 
-> "我会：
-> 1. 在更大数据集（如 ImageNet）上验证
-> 2. 尝试 Feature-based 蒸馏方法
-> 3. 结合量化/剪枝进一步压缩
-> 4. 测量实际推理延迟，而不仅仅是参数量"
+### Q18: Why do some methods underperform on Tiny‑ImageNet?
+Answer: Attention Transfer can be too coarse at 64×64 resolution, and EMA self‑distillation relies on a strong student, which is less reliable on difficult tasks. KD and Contrastive use a strong teacher signal, so they remain effective.
+
+### Q19: How would you combine methods?
+Answer: I would use a weighted sum of KD loss and feature loss (e.g., KD + FitNets) or KD + Contrastive. A small ablation would determine the best mixing weights.
+
+### Q20: How would you deploy the student model?
+Answer: I would export the student to ONNX/TensorRT, measure latency on target hardware, and consider quantization for further speedup while monitoring accuracy drops.
+
+### Q21: What are the limitations of your current study?
+Answer: Only one teacher‑student pair was tested, datasets were limited to CIFAR/Tiny‑ImageNet, and I did not measure real hardware latency. These are natural extensions.
+
+### Q22: What practical insights does this project offer?
+Answer: Distillation is most beneficial for harder tasks, and simple logits‑based KD can outperform more complex methods. This suggests a strong baseline before investing in sophisticated techniques.
 
 ---
 
-## ✅ 面试前检查清单
+## Implementation Highlights (talking points)
 
-- [ ] 能流利说出项目概述（30秒版本）
-- [ ] 记住关键数据（准确率、参数量、提升幅度）
-- [ ] 理解损失函数每一项的含义
-- [ ] 能解释 Temperature 和 Alpha 的作用
-- [ ] 能解释为什么 CIFAR-100 效果更好
-- [ ] 准备好代码演示（如需要）
-- [ ] 准备 2-3 个你想问面试官的问题
+- Teacher: ResNet-34 adapted for CIFAR/Tiny-ImageNet
+- Student: MobileNetV2, width multiplier = 1.0
+- Distillation methods: logits, feature, attention, self, contrastive
+- SLURM scripts with reproducible checkpoints
+- TensorBoard logging for training curves
 
 ---
 
-## 🗣️ 提问面试官的建议问题
+## Questions to Ask Interviewers
 
-1. "这个硕士项目的主要研究方向是什么？"
-2. "团队目前在模型压缩/高效学习方面有哪些正在进行的工作？"
-3. "作为硕士生，我会有哪些合作机会？"
+1. What is the project's main research focus in model compression?
+2. How much emphasis is placed on theory vs. engineering?
+3. What datasets or benchmarks do you expect students to use?
+4. What computing resources are available for large-scale training?
 
 ---
 
-**祝面试顺利！Good luck! 🍀**
+Good luck!
+

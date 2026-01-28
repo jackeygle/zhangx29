@@ -6,7 +6,10 @@
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu-v100-16g
+#SBATCH --partition=gpu-v100-32g
+
+# Config
+DATASET=${DATASET:-cifar10}
 
 # Parse arguments
 USE_KD=true
@@ -54,11 +57,12 @@ if [ "$USE_KD" = true ]; then
     echo "Temperature: $TEMPERATURE, Alpha: $ALPHA, Width: $WIDTH"
     
     python src/train_student.py \
+        --dataset "$DATASET" \
         --epochs 200 \
         --lr 0.1 \
         --batch-size 128 \
         --scheduler cosine \
-        --teacher-ckpt ./checkpoints/teacher_best.pth \
+        --teacher-ckpt "./checkpoints/teacher_${DATASET}_best.pth" \
         --temperature $TEMPERATURE \
         --alpha $ALPHA \
         --width-mult $WIDTH \
@@ -69,6 +73,7 @@ else
     echo "Training student WITHOUT Knowledge Distillation (baseline)"
     
     python src/train_student.py \
+        --dataset "$DATASET" \
         --epochs 200 \
         --lr 0.1 \
         --batch-size 128 \

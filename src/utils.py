@@ -50,10 +50,10 @@ def get_dataloader(
     num_workers: int = 4
 ) -> Tuple[DataLoader, DataLoader]:
     """
-    Get train and test data loaders for CIFAR-10 or CIFAR-100.
+    Get train and test data loaders for CIFAR-10, CIFAR-100, or Tiny-ImageNet.
     
     Args:
-        dataset: 'cifar10' or 'cifar100'
+        dataset: 'cifar10', 'cifar100', or 'tinyimagenet'
         data_dir: Directory to store/load dataset
         batch_size: Batch size for training
         num_workers: Number of data loading workers
@@ -61,39 +61,72 @@ def get_dataloader(
     Returns:
         train_loader, test_loader
     """
-    # CIFAR-10 and CIFAR-100 have the same normalization stats
-    mean = [0.4914, 0.4822, 0.4465]
-    std = [0.2023, 0.1994, 0.2010]
-    
-    # Training transforms with augmentation
-    train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
-    ])
-    
-    # Test transforms (no augmentation)
-    test_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
-    ])
-    
-    # Select dataset
-    if dataset.lower() == 'cifar10':
-        DatasetClass = torchvision.datasets.CIFAR10
-    elif dataset.lower() == 'cifar100':
-        DatasetClass = torchvision.datasets.CIFAR100
+    dataset_key = dataset.lower().replace("-", "").replace("_", "")
+
+    if dataset_key in {'cifar10', 'cifar100'}:
+        # CIFAR-10 and CIFAR-100 have the same normalization stats
+        mean = [0.4914, 0.4822, 0.4465]
+        std = [0.2023, 0.1994, 0.2010]
+
+        # Training transforms with augmentation
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
+
+        # Test transforms (no augmentation)
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
+
+        # Select dataset
+        if dataset_key == 'cifar10':
+            DatasetClass = torchvision.datasets.CIFAR10
+        else:
+            DatasetClass = torchvision.datasets.CIFAR100
+
+        train_dataset = DatasetClass(
+            root=data_dir, train=True, download=True, transform=train_transform
+        )
+        test_dataset = DatasetClass(
+            root=data_dir, train=False, download=True, transform=test_transform
+        )
+    elif dataset_key == 'tinyimagenet':
+        # Tiny-ImageNet (200 classes, 64x64)
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(64, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
+
+        test_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
+
+        tiny_root = os.path.join(data_dir, 'tiny-imagenet-200')
+        train_dir = os.path.join(tiny_root, 'train')
+        val_dir = os.path.join(tiny_root, 'val')
+        if not os.path.isdir(train_dir) or not os.path.isdir(val_dir):
+            raise FileNotFoundError(
+                "Tiny-ImageNet not found. Run scripts/prepare_tinyimagenet.sh "
+                "or place the dataset at data/tiny-imagenet-200."
+            )
+
+        train_dataset = torchvision.datasets.ImageFolder(train_dir, transform=train_transform)
+        test_dataset = torchvision.datasets.ImageFolder(val_dir, transform=test_transform)
     else:
-        raise ValueError(f"Unknown dataset: {dataset}. Use 'cifar10' or 'cifar100'")
-    
-    train_dataset = DatasetClass(
-        root=data_dir, train=True, download=True, transform=train_transform
-    )
-    test_dataset = DatasetClass(
-        root=data_dir, train=False, download=True, transform=test_transform
-    )
-    
+        raise ValueError(
+            f"Unknown dataset: {dataset}. Use 'cifar10', 'cifar100', or 'tinyimagenet'"
+        )
+
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
         num_workers=num_workers, pin_memory=True
@@ -102,16 +135,19 @@ def get_dataloader(
         test_dataset, batch_size=batch_size, shuffle=False,
         num_workers=num_workers, pin_memory=True
     )
-    
+
     return train_loader, test_loader
 
 
 def get_num_classes(dataset: str) -> int:
     """Get number of classes for a dataset."""
-    if dataset.lower() == 'cifar10':
+    dataset_key = dataset.lower().replace("-", "").replace("_", "")
+    if dataset_key == 'cifar10':
         return 10
-    elif dataset.lower() == 'cifar100':
+    elif dataset_key == 'cifar100':
         return 100
+    elif dataset_key == 'tinyimagenet':
+        return 200
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
 
@@ -194,36 +230,53 @@ def accuracy(output: torch.Tensor, target: torch.Tensor, topk=(1,)) -> list:
         return res
 
 
-def get_module_by_name(model: nn.Module, module_path: str) -> nn.Module:
+def get_module_by_name(model: nn.Module, name: str) -> nn.Module:
     """
-    Get a nested module from a model by a dot-separated path.
-
-    Supports integer indices for Sequential/ModuleList.
-    Example: "features.18" or "layer4.1.conv2"
+    Get a module from model by its name (e.g., 'features.0').
+    
+    Args:
+        model: PyTorch model
+        name: Module name, can be dot-separated (e.g., 'features.0')
+    
+    Returns:
+        The requested module
     """
-    current = model
-    for part in module_path.split("."):
-        if part.isdigit():
-            current = current[int(part)]
+    names = name.split('.')
+    module = model
+    for n in names:
+        if hasattr(module, n):
+            module = getattr(module, n)
+        elif hasattr(module, '__getitem__'):
+            module = module[int(n)]
         else:
-            current = getattr(current, part)
-    return current
+            raise AttributeError(f"Module {model.__class__.__name__} has no attribute '{n}'")
+    return module
 
 
 class FeatureHook:
-    """Capture forward outputs from a module."""
-
+    """
+    Hook to capture intermediate feature maps from a model.
+    Used for feature-based distillation methods (FitNets, Attention Transfer).
+    """
+    
     def __init__(self, module: nn.Module):
+        self.module = module
         self.features = None
-        self.handle = module.register_forward_hook(self._hook)
-
-    def _hook(self, _module, _input, output):
+        self.hook = module.register_forward_hook(self._hook_fn)
+    
+    def _hook_fn(self, module, input, output):
+        """Store the output feature map."""
         self.features = output
-
-    def close(self):
-        if self.handle is not None:
-            self.handle.remove()
-            self.handle = None
+    
+    def remove(self):
+        """Remove the hook."""
+        self.hook.remove()
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.remove()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu-v100-16g
+#SBATCH --partition=gpu-v100-32g
 
 # Parse arguments
 USE_KD=true

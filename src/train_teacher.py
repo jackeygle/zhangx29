@@ -162,7 +162,7 @@ if __name__ == "__main__":
     
     # Data
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100'], help='Dataset to use')
+                        choices=['cifar10', 'cifar100', 'tinyimagenet'], help='Dataset to use')
     parser.add_argument('--data-dir', type=str, default='./data')
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--num-workers', type=int, default=4)
